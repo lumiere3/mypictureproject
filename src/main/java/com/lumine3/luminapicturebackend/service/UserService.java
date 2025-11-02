@@ -1,10 +1,14 @@
 package com.lumine3.luminapicturebackend.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.lumine3.luminapicturebackend.model.dto.user.UserQueryRequest;
 import com.lumine3.luminapicturebackend.model.entity.User;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lumine3.luminapicturebackend.model.vo.LoginUserVO;
+import com.lumine3.luminapicturebackend.model.vo.UserVO;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
  * @author Asus
@@ -64,4 +68,27 @@ public interface UserService extends IService<User> {
      * @return 布尔
      */
     boolean userLogout(HttpServletRequest request);
+
+    /**
+     * 把User转成UserVO 一条数据
+     *
+     * @param user 原信息
+     * @return UserVO 进行脱敏
+     */
+    UserVO getUserVO(User user);
+
+    /**
+     * 转换 多条数据
+     *
+     * @param users 原信息
+     * @return UserVO 进行脱敏
+     */
+    List<UserVO> getUserVOList(List<User> users);
+
+    /**
+     * *通过请求,获取查询条件 Wrapper
+     * @param userQueryRequest 查询请求体
+     * @return QueryWrapper
+     */
+    QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest);
 }

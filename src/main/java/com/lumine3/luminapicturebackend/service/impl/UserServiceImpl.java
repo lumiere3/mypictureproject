@@ -1,6 +1,8 @@
 package com.lumine3.luminapicturebackend.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -8,9 +10,11 @@ import com.lumine3.luminapicturebackend.constant.UserConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
+import com.lumine3.luminapicturebackend.model.dto.user.UserQueryRequest;
 import com.lumine3.luminapicturebackend.model.entity.User;
 import com.lumine3.luminapicturebackend.model.enums.UserRoleEnum;
 import com.lumine3.luminapicturebackend.model.vo.LoginUserVO;
+import com.lumine3.luminapicturebackend.model.vo.UserVO;
 import com.lumine3.luminapicturebackend.service.UserService;
 import com.lumine3.luminapicturebackend.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Asus
@@ -179,6 +185,68 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         }
         request.getSession().removeAttribute(UserConstant.USER_LOGIN_STATUS);
         return true;
+    }
+
+    /**
+     * 把User转成UserVO
+     *
+     * @param user 原信息
+     * @return
+     */
+    @Override
+    public UserVO getUserVO(User user) {
+        if (user == null) {
+            return null;
+        }
+        UserVO userVO = new UserVO();
+        BeanUtil.copyProperties(user, userVO);
+        return userVO;
+    }
+
+    @Override
+    public List<UserVO> getUserVOList(List<User> users) {
+        if (CollUtil.isEmpty(users)) {
+            return new ArrayList<>();
+        }
+        List<UserVO> userVOList = new ArrayList<>();
+        for (User user : users) {
+            UserVO userVO = this.getUserVO(user);
+            BeanUtil.copyProperties(user, userVO);
+            userVOList.add(userVO);
+        }
+        return userVOList;
+    }
+
+    /**
+     * @param userQueryRequest 查询请求体
+     * @return
+     */
+    @Override
+    public QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest) {
+        if (userQueryRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+        //构造wrapper, 首先获取参数
+        Long id = userQueryRequest.getId();
+        String userName = userQueryRequest.getUserName();
+        String userAccount = userQueryRequest.getUserAccount();
+        String userProfile = userQueryRequest.getUserProfile();
+        String userRole = userQueryRequest.getUserRole();
+        String sortField = userQueryRequest.getSortField();
+        String sortOrder = userQueryRequest.getSortOrder();
+
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        //如果参数不是空, 传入参数
+        queryWrapper.eq(ObjUtil.isNotNull(id),"id",id);
+        queryWrapper.eq(StrUtil.isNotBlank(userRole),"userRole",userRole);
+        queryWrapper.like(StrUtil.isNotBlank(userName),"userName",userName);
+        queryWrapper.like(StrUtil.isNotBlank(userAccount),"userAccount",userAccount);
+        queryWrapper.like(StrUtil.isNotBlank(userProfile),"userProfile",userProfile);
+        //排序方式
+        queryWrapper.orderBy(StrUtil.isNotBlank(sortField),sortOrder.equals("ascend"),sortField);
+
+        //返回
+        return queryWrapper;
     }
 }
 

@@ -1,4 +1,4 @@
-package com.lumine3.luminapicturebackend.model.dto;
+package com.lumine3.luminapicturebackend.model.dto.user;
 
 
 import lombok.Data;

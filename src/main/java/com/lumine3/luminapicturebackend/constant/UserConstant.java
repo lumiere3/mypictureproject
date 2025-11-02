@@ -7,6 +7,12 @@ public interface UserConstant {
     String SALT = "lumine";
 
     /**
+     * 用户的默认密码
+     * 由管理员创建用户的时候, 设置的用户默认密码
+     */
+    String DEFAULT_PASSWORD = "123456";
+
+    /**
      * 用户登录态键
      */
     String USER_LOGIN_STATUS = "user_login";
