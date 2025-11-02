@@ -32,7 +32,6 @@ public class UserController {
     @Resource
     private UserService userService;
 
-
     /**
      * 用户注册接口
      *
@@ -158,7 +157,6 @@ public class UserController {
         return ResultUtils.success(removed);
     }
 
-
     /**
      * 更新用户 -> 管理员进行
      * @param userUpdateRequest
@@ -176,7 +174,6 @@ public class UserController {
         ThrowUtils.throwIf(!updated,ErrorCode.OPERATION_ERROR,"更新用户失败!");
         return ResultUtils.success(updated);
     }
-
 
     /**
      * 分页查询
@@ -198,9 +195,6 @@ public class UserController {
         userVOPage.setRecords(userVOList);
         return ResultUtils.success(userVOPage);
     }
-
-
-
 
 
 }
