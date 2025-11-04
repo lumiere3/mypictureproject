@@ -10,6 +10,7 @@ import com.lumine3.luminapicturebackend.constant.UserConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
+import com.lumine3.luminapicturebackend.model.dto.user.UserAddRequest;
 import com.lumine3.luminapicturebackend.model.dto.user.UserQueryRequest;
 import com.lumine3.luminapicturebackend.model.entity.User;
 import com.lumine3.luminapicturebackend.model.enums.UserRoleEnum;
@@ -247,6 +248,44 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         //返回
         return queryWrapper;
+    }
+
+    /**
+     * 管理员创建一个新用户
+     * @param userAddRequest 管理员添加用户的请求类
+     * @return
+     */
+    @Override
+    public long addUserByAdmin(UserAddRequest userAddRequest) {
+        //判断
+        ThrowUtils.throwIf(userAddRequest == null, ErrorCode.PARAMS_ERROR, "请求参数为空!");
+        // 账号必须有, 角色权限必须有
+        String userAccount = userAddRequest.getUserAccount();
+        String userRole = userAddRequest.getUserRole();
+        // 账号检验: 必须存在
+        ThrowUtils.throwIf(StrUtil.isEmpty(userAccount),ErrorCode.PARAMS_ERROR,"账号不能为空!");
+        // 账号检验: 长度不能小于4
+        ThrowUtils.throwIf(userAccount.length() < 4,ErrorCode.PARAMS_ERROR,"账号长度不能小于4!");
+        // 用户权限检验: 必须存在
+        ThrowUtils.throwIf(StrUtil.isEmpty(userRole),ErrorCode.PARAMS_ERROR,"用户权限未设置!");
+        // 用户权限检验: 必须合法
+        UserRoleEnum userRoleEnum = UserRoleEnum.getEnumByValue(userRole);
+        if(userRoleEnum == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"用户权限不合法!");
+        }
+        //获取数据
+        User user = new User();
+        BeanUtil.copyProperties(userAddRequest,user);
+        // todo 现在我们不能上传头像, 因此我们设置一个默认头像
+        if(userAddRequest.getUserAvatar() == null || userAddRequest.getUserAvatar().equals("")){
+            user.setUserAvatar("https://web-isyal.oss-cn-beijing.aliyuncs.com/%E5%A4%B4%E5%83%8F/1721148175325.jpg");
+        }
+        //填充默认密码
+        String defaultPassword = doPasswordEncryption(UserConstant.DEFAULT_PASSWORD);
+        user.setUserPassword(defaultPassword);
+        boolean saved = this.save(user);
+        ThrowUtils.throwIf(!saved,ErrorCode.OPERATION_ERROR,"数据库错误, 新建用户失败!");
+        return user.getId();
     }
 }
 

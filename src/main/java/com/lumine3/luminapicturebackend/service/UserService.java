@@ -1,6 +1,7 @@
 package com.lumine3.luminapicturebackend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.lumine3.luminapicturebackend.model.dto.user.UserAddRequest;
 import com.lumine3.luminapicturebackend.model.dto.user.UserQueryRequest;
 import com.lumine3.luminapicturebackend.model.entity.User;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -91,4 +92,12 @@ public interface UserService extends IService<User> {
      * @return QueryWrapper
      */
     QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest);
+
+
+    /**
+     * 管理员创建一个新用户
+     * @param userAddRequest 管理员添加用户的请求类
+     * @return 布尔
+     */
+    long addUserByAdmin(UserAddRequest userAddRequest);
 }

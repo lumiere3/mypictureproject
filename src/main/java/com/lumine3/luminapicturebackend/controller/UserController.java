@@ -99,17 +99,9 @@ public class UserController {
     @PostMapping("/add")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE) //管理员权限
     public BaseResponse<Long> addUser(@RequestBody UserAddRequest userAddRequest) {
-        //判断
-        ThrowUtils.throwIf(userAddRequest == null, ErrorCode.PARAMS_ERROR, "请求参数为空!");
-        //获取数据
-        User user = new User();
-        BeanUtil.copyProperties(userAddRequest,user);
-        //填充默认密码
-        String defaultPassword = userService.doPasswordEncryption(UserConstant.DEFAULT_PASSWORD);
-        user.setUserPassword(defaultPassword);
-        boolean saved = userService.save(user);
-        ThrowUtils.throwIf(!saved,ErrorCode.OPERATION_ERROR,"数据库错误, 新建用户失败!");
-        return ResultUtils.success(user.getId());
+        Long saved = userService.addUserByAdmin(userAddRequest);
+        ThrowUtils.throwIf(saved == null,ErrorCode.OPERATION_ERROR,"数据库错误, 新建用户失败!");
+        return ResultUtils.success(saved);
     }
 
 
@@ -129,7 +121,7 @@ public class UserController {
     }
 
     /**
-     * 根据id获取用户VO 对于普通用户
+     * 根据id获取用户VO ,对于普通用户
      * @param id
      * @return
      */
@@ -143,7 +135,7 @@ public class UserController {
 
 
     /**
-     * 删除用户 只能管理员进行
+     * 删除用户 ,只能管理员进行
      * @param deleteRequest
      * @return
      */
@@ -176,8 +168,7 @@ public class UserController {
     }
 
     /**
-     * 分页查询
-     *
+     * 分页查询,
      */
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @PostMapping("/list/page/vo")
