@@ -1,4 +1,4 @@
-package com.lumine3.luminapicturebackend.model.dto.file;
+package com.lumine3.luminapicturebackend.model.dto.picture;
 
 import com.lumine3.luminapicturebackend.common.PageRequest;
 import lombok.Data;

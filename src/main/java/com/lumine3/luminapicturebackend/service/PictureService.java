@@ -2,7 +2,7 @@ package com.lumine3.luminapicturebackend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.lumine3.luminapicturebackend.model.dto.file.PictureQueryRequest;
+import com.lumine3.luminapicturebackend.model.dto.picture.PictureQueryRequest;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureUploadRequest;
 import com.lumine3.luminapicturebackend.model.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;

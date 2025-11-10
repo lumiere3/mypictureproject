@@ -1,4 +1,4 @@
-package com.lumine3.luminapicturebackend.model.dto.file;
+package com.lumine3.luminapicturebackend.model.dto.picture;
 
 import lombok.Data;
 
@@ -6,12 +6,12 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * 编辑图片 -> 给普通用户使用
+ * 更新请求, -> 给管理员使用
  */
 @Data
-public class PictureEditRequest implements Serializable {
+public class PictureUpdateRequest implements Serializable {
 
-    private static final long serialVersionUID = 2368252146494511564L;
+    private static final long serialVersionUID = 7810324521427172504L;
     /**
      * id
      */
@@ -36,5 +36,6 @@ public class PictureEditRequest implements Serializable {
      * 标签
      */
     private List<String> tags;
+
 
 }

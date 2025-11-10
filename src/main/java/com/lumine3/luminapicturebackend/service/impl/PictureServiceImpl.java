@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
 import com.lumine3.luminapicturebackend.manager.FileManager;
-import com.lumine3.luminapicturebackend.model.dto.file.PictureQueryRequest;
+import com.lumine3.luminapicturebackend.model.dto.picture.PictureQueryRequest;
 import com.lumine3.luminapicturebackend.model.dto.file.UploadPictureResult;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureUploadRequest;
 import com.lumine3.luminapicturebackend.model.entity.Picture;
