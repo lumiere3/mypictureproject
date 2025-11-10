@@ -287,6 +287,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         ThrowUtils.throwIf(!saved,ErrorCode.OPERATION_ERROR,"数据库错误, 新建用户失败!");
         return user.getId();
     }
+
+    /**
+     * 判断用户是否为管理员
+     *
+     * @param user
+     * @return
+     */
+    @Override
+    public boolean isAdmin(User user) {
+        if (user == null) {
+            return false;
+        }
+        String userRole = user.getUserRole();
+        UserRoleEnum userRoleEnum = UserRoleEnum.getEnumByValue(userRole);
+        if (userRoleEnum == null) {
+            return false;
+        }
+        return userRoleEnum == UserRoleEnum.ADMIN;
+    }
 }
 
 
