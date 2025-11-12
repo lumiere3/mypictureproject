@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
 import com.lumine3.luminapicturebackend.manager.FileManager;
@@ -236,6 +237,25 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
     }
 
+    /**
+     * 获取用户上传的头像并且获取url
+     * @param multipartFile
+     * @return
+     */
+    @Override
+    public String getUserAvatar(MultipartFile multipartFile ,User user) {
+        //校验参数
+        if (multipartFile == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        if (user == null){
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+        //上传图片, 获得图片信息
+        String uploadPathPrefix = String.format("avatar/%s",user.getId());
+        UploadPictureResult uploadPictureResult = fileManager.uploadPicture(multipartFile, uploadPathPrefix);
+        return uploadPictureResult.getUrl();
+    }
 
 
 }

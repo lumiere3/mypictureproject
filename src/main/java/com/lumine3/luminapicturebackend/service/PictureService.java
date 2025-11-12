@@ -57,4 +57,12 @@ public interface PictureService extends IService<Picture> {
     Page<PictureVO> getPictureVOPage(Page<Picture> picturePage, HttpServletRequest request);
 
     void validPicture(Picture picture);
+
+
+    /**
+     * 上传用户头像并获取url
+     * @param multipartFile
+     * @return
+     */
+    String getUserAvatar(MultipartFile multipartFile, User user);
 }

@@ -15,6 +15,7 @@ import com.lumine3.luminapicturebackend.model.entity.Picture;
 import com.lumine3.luminapicturebackend.model.entity.User;
 import com.lumine3.luminapicturebackend.model.vo.PictureTagCategory;
 import com.lumine3.luminapicturebackend.model.vo.PictureVO;
+import com.lumine3.luminapicturebackend.model.vo.UserAvatarVO;
 import com.lumine3.luminapicturebackend.service.PictureService;
 import com.lumine3.luminapicturebackend.service.UserService;
 import lombok.extern.slf4j.Slf4j;
@@ -215,6 +216,20 @@ public class PictureController {
         pictureTagCategory.setTagList(tagList);
         pictureTagCategory.setCategoryList(categoryList);
         return ResultUtils.success(pictureTagCategory);
+    }
+
+
+    /**
+     *  获取用户上传的头像的url
+      */
+    @PostMapping("/getAvatar")
+    public BaseResponse<UserAvatarVO> getUserAvatar(MultipartFile file, HttpServletRequest request) {
+        ThrowUtils.throwIf(file.isEmpty(), ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        UserAvatarVO userAvatarVO = new UserAvatarVO();
+        String userAvatar = pictureService.getUserAvatar(file,loginUser);
+        userAvatarVO.setUserAvatar(userAvatar);
+        return ResultUtils.success(userAvatarVO);
     }
 
 }

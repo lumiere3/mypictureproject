@@ -14,9 +14,11 @@ import com.lumine3.luminapicturebackend.exception.ThrowUtils;
 import com.lumine3.luminapicturebackend.model.dto.user.*;
 import com.lumine3.luminapicturebackend.model.entity.User;
 import com.lumine3.luminapicturebackend.model.vo.LoginUserVO;
+import com.lumine3.luminapicturebackend.model.vo.UserAvatarVO;
 import com.lumine3.luminapicturebackend.model.vo.UserVO;
 import com.lumine3.luminapicturebackend.service.UserService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -186,6 +188,5 @@ public class UserController {
         userVOPage.setRecords(userVOList);
         return ResultUtils.success(userVOPage);
     }
-
 
 }
