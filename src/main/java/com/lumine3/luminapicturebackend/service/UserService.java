@@ -1,6 +1,7 @@
 package com.lumine3.luminapicturebackend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.lumine3.luminapicturebackend.model.dto.picture.PictureReviewRequest;
 import com.lumine3.luminapicturebackend.model.dto.user.UserAddRequest;
 import com.lumine3.luminapicturebackend.model.dto.user.UserQueryRequest;
 import com.lumine3.luminapicturebackend.model.entity.User;
@@ -108,4 +109,6 @@ public interface UserService extends IService<User> {
      * @return
      */
     boolean isAdmin(User user);
+
+
 }

@@ -3,6 +3,7 @@ package com.lumine3.luminapicturebackend.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureQueryRequest;
+import com.lumine3.luminapicturebackend.model.dto.picture.PictureReviewRequest;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureUploadRequest;
 import com.lumine3.luminapicturebackend.model.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -65,4 +66,11 @@ public interface PictureService extends IService<Picture> {
      * @return
      */
     String getUserAvatar(MultipartFile multipartFile, User user);
+
+    /**
+     * 审核用户上传的图片
+     */
+    void doPictureReview(PictureReviewRequest pictureReviewRequest, User user);
+
+    void fillReviewParams(Picture picture, User user);
 }
