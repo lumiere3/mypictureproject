@@ -42,7 +42,7 @@ public class PictureController {
 
 
     /**
-     * 上传图片 -> 目前阶段只有管理员可以
+     * 上传图片
      *
      * @param file
      * @return
@@ -59,6 +59,28 @@ public class PictureController {
         PictureVO pictureVO = pictureService.uploadPicture(file, pictureUploadRequest, loginUser);
         return ResultUtils.success(pictureVO);
     }
+
+    /**
+     * 上传图片  -> 下载支持使用url来上传
+     *
+     * @param pictureUploadRequest
+     * @return
+     */
+    @PostMapping("/upload/url")
+    /*@AuthCheck(mustRole = UserConstant.ADMIN_ROLE)*/
+    public BaseResponse<PictureVO> uploadPictureByUrl(
+            @RequestBody PictureUploadRequest pictureUploadRequest
+            , HttpServletRequest request
+    ) {
+        //获取登录用户
+        User loginUser = userService.getLoginUser(request);
+        //获取url
+        String fileUrl = pictureUploadRequest.getFileUrl();
+        PictureVO pictureVO = pictureService.uploadPicture(fileUrl, pictureUploadRequest, loginUser);
+        return ResultUtils.success(pictureVO);
+    }
+
+
 
     /**
      * 删除图片

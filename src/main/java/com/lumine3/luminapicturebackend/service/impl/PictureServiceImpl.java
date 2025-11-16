@@ -10,6 +10,9 @@ import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
 import com.lumine3.luminapicturebackend.manager.FileManager;
+import com.lumine3.luminapicturebackend.manager.upload.FilePictureUpload;
+import com.lumine3.luminapicturebackend.manager.upload.PictureUploadTemplate;
+import com.lumine3.luminapicturebackend.manager.upload.UrlPictureUpload;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureQueryRequest;
 import com.lumine3.luminapicturebackend.model.dto.file.UploadPictureResult;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureReviewRequest;
@@ -49,17 +52,24 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Resource
     private UserService userService;
 
+    @Resource
+    private FilePictureUpload filePictureUpload;
+
+    @Resource
+    private UrlPictureUpload urlPictureUpload;
+
     /**
      * 文件上传接口
      *
-     * @param multipartFile        文件
+     * @param inputSource        文件
      * @param pictureUploadRequest 平台结果
      * @param loginUser
      * @return VO
      */
     @Override
-    public PictureVO uploadPicture(MultipartFile multipartFile, PictureUploadRequest pictureUploadRequest, User loginUser) {
+    public PictureVO uploadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser) {
         // 校验参数
+        ThrowUtils.throwIf(inputSource == null,ErrorCode.PARAMS_ERROR,"图片文件或url为空!");
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR);
         // 判断是新增还是删除
         Long pictureId = null;
@@ -81,7 +91,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
         //上传图片, 获得图片信息
         String uploadPathPrefix = String.format("public/%s", loginUser.getId());
-        UploadPictureResult uploadPictureResult = fileManager.uploadPicture(multipartFile, uploadPathPrefix);
+        // 根据inputSource的类型: 文件 或者 url 来区分上传的参数
+        PictureUploadTemplate pictureUploadTemplate = filePictureUpload;
+        // inputSource是字符串类型, 说明是一个url , 我们就使用url的方法
+        if(inputSource instanceof String){
+            pictureUploadTemplate = urlPictureUpload;
+        }
+        UploadPictureResult uploadPictureResult = pictureUploadTemplate.uploadPicture(inputSource, uploadPathPrefix);
         // 获取返回结果
         // 构造要入库的图片信息, 即Picture对象
         Picture picture = new Picture();
@@ -271,7 +287,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
         //上传图片, 获得图片信息
         String uploadPathPrefix = String.format("avatar/%s",user.getId());
-        UploadPictureResult uploadPictureResult = fileManager.uploadPicture(multipartFile, uploadPathPrefix);
+        UploadPictureResult uploadPictureResult = filePictureUpload.uploadPicture(multipartFile, uploadPathPrefix);
         return uploadPictureResult.getUrl();
     }
 
