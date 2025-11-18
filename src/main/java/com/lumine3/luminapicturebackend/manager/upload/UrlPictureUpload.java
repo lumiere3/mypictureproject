@@ -16,9 +16,17 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class UrlPictureUpload extends PictureUploadTemplate {
+    /**
+     * 图片后缀类型
+     *
+     */
+     private final AtomicReference<String> imgTypeRef = new AtomicReference<>();
+
+
     @Override
     protected void processFile(Object inputSource, File file) throws Exception {
         String fileUrl = (String) inputSource;
@@ -28,7 +36,14 @@ public class UrlPictureUpload extends PictureUploadTemplate {
     @Override
     protected String getOriginalFilename(Object inputSource) {
         String fileUrl = (String) inputSource;
-        return FileUtil.mainName(fileUrl);
+        String suffix = FileUtil.getSuffix(fileUrl);
+
+        final List<String> ALLOW_CONTENT_TYPES = Arrays.asList("image/jpeg", "image/jpg", "image/png", "image/webp");
+
+        if (!ALLOW_CONTENT_TYPES.contains(suffix)) {
+            fileUrl = fileUrl + imgTypeRef.get();
+        }
+        return FileUtil.getName(fileUrl);
     }
 
     @Override
@@ -60,8 +75,17 @@ public class UrlPictureUpload extends PictureUploadTemplate {
             if (StrUtil.isNotBlank(contentType)) {
                 // 允许的图片类型
                 final List<String> ALLOW_CONTENT_TYPES = Arrays.asList("image/jpeg", "image/jpg", "image/png", "image/webp");
-                ThrowUtils.throwIf(!ALLOW_CONTENT_TYPES.contains(contentType.toLowerCase()),
-                        ErrorCode.PARAMS_ERROR, "文件类型错误");
+                // 格式是否正确
+                boolean isPermit = false;
+                for (String imgType : ALLOW_CONTENT_TYPES) {
+                    // 如果格式符合
+                    if (imgType.equalsIgnoreCase(contentType)) {
+                        imgTypeRef.set("." +imgType.substring(imgType.indexOf("/") + 1));
+                        isPermit = true;
+                        break;
+                    }
+                }
+                ThrowUtils.throwIf(!isPermit, ErrorCode.PARAMS_ERROR, "文件类型错误");
             }
             // 5. 校验文件大小
             String contentLengthStr = response.header("Content-Length");

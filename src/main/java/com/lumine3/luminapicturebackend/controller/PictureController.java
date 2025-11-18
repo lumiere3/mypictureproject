@@ -1,7 +1,10 @@
 package com.lumine3.luminapicturebackend.controller;
 
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.lumine3.luminapicturebackend.annotation.AuthCheck;
 import com.lumine3.luminapicturebackend.common.BaseResponse;
 import com.lumine3.luminapicturebackend.common.DeleteRequest;
@@ -21,14 +24,19 @@ import com.lumine3.luminapicturebackend.service.PictureService;
 import com.lumine3.luminapicturebackend.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/picture")
@@ -39,6 +47,19 @@ public class PictureController {
     private PictureService pictureService;
     @Resource
     private UserService userService;
+    // 引入Redis
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+
+    /**
+     * 构建本地缓存 caffeine实现 为了方便直接在controller里面使用
+     */
+    private final Cache<String, String> LOCAL_CACHE = Caffeine.newBuilder()
+            .initialCapacity(1024)
+            .maximumSize(10_000L)
+            .expireAfterWrite(Duration.ofMinutes(5)) //过期时间 5分钟
+            .build();
 
 
     /**
@@ -205,6 +226,50 @@ public class PictureController {
     }
 
     /**
+     * 分页获取图片列表（封装类） -> 这里使用了缓存
+     */
+    @PostMapping("/list/page/vo/cache")
+    public BaseResponse<Page<PictureVO>> listPictureVOByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest,
+                                                             HttpServletRequest request) {
+        long current = pictureQueryRequest.getCurrent();
+        long size = pictureQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
+        // 用户只能看到审核通过的图片
+        pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+        // 引入了缓存, 因此我们在查询数据库之前, 应该前尝试从缓存获取
+        // 构建缓存的key + 注意需要加入查询条件 -> 我们需要把查询条件序列化
+        String queryJSON = JSONUtil.toJsonStr(pictureQueryRequest);
+        //json可能长度很长 , 以此需要进行转化 使用md5
+        String hashKey = DigestUtils.md5DigestAsHex(queryJSON.getBytes());
+        // 拼接成为key
+        String cacheKey = String.format("lumina-picture:listPictureVOByPage:%s", hashKey);
+        //操作redis进行查询
+        ValueOperations<String, String> opsForValue = stringRedisTemplate.opsForValue();
+        String cachedValue = opsForValue.get(cacheKey);
+        if (cachedValue != null) {
+            // 把value转成对象返回
+            Page<PictureVO> cacheBean = JSONUtil.toBean(cachedValue, Page.class);
+            return ResultUtils.success(cacheBean);
+        }
+        // 缓存不存在就查询数据库
+        // 查询数据库
+        Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
+                pictureService.getQueryWrapper(pictureQueryRequest));
+        // 获取封装类
+        Page<PictureVO> pictureVOPage = pictureService.getPictureVOPage(picturePage, request);
+        //写入缓存 key我们已经构建过了, 现在只需要构造value
+        String cacheValue = JSONUtil.toJsonStr(pictureVOPage);
+        //设置过期时间 5-10分钟随机
+        int expireTime = 300 + RandomUtil.randomInt(0,300);
+        opsForValue.set(cacheKey, cacheValue, expireTime, TimeUnit.SECONDS);
+        return ResultUtils.success(pictureVOPage);
+    }
+
+
+
+
+    /**
      * 编辑图片（给用户使用）
      */
     @PostMapping("/edit")
@@ -276,5 +341,23 @@ public class PictureController {
         User loginUser = userService.getLoginUser(request);
         pictureService.doPictureReview(pictureReviewRequest, loginUser);
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 批量抓取图片
+     * @return
+     */
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @PostMapping("/upload/batch")
+    public BaseResponse<Integer> uploadPictureByBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,
+                                             HttpServletRequest request) {
+        // 检验数据
+        if (pictureUploadByBatchRequest == null ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        // 获取当前用户
+        User loginUser = userService.getLoginUser(request);
+        int uploadCount = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, loginUser);
+        return ResultUtils.success(uploadCount);
     }
 }

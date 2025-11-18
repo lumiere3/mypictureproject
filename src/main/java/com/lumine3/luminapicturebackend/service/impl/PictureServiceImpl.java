@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lumine3.luminapicturebackend.constant.PictureConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
@@ -16,6 +17,7 @@ import com.lumine3.luminapicturebackend.manager.upload.UrlPictureUpload;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureQueryRequest;
 import com.lumine3.luminapicturebackend.model.dto.file.UploadPictureResult;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureReviewRequest;
+import com.lumine3.luminapicturebackend.model.dto.picture.PictureUploadByBatchRequest;
 import com.lumine3.luminapicturebackend.model.dto.picture.PictureUploadRequest;
 import com.lumine3.luminapicturebackend.model.entity.Picture;
 import com.lumine3.luminapicturebackend.model.entity.User;
@@ -25,12 +27,19 @@ import com.lumine3.luminapicturebackend.model.vo.UserVO;
 import com.lumine3.luminapicturebackend.service.PictureService;
 import com.lumine3.luminapicturebackend.mapper.PictureMapper;
 import com.lumine3.luminapicturebackend.service.UserService;
+import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Connection;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -42,11 +51,13 @@ import java.util.stream.Collectors;
 * @description 针对表【picture(图片)】的数据库操作Service实现
 * @createDate 2025-11-05 20:11:30
 */
+@Slf4j
 @Service
 public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     implements PictureService{
 
     @Resource
+    @Deprecated
     private FileManager fileManager;
 
     @Resource
@@ -86,8 +97,6 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             if(!loginUser.getId().equals(uploader) && !userService.isAdmin(loginUser)){
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"没有权限!无法更新图片!");
             }
-
-
         }
         //上传图片, 获得图片信息
         String uploadPathPrefix = String.format("public/%s", loginUser.getId());
@@ -102,7 +111,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 构造要入库的图片信息, 即Picture对象
         Picture picture = new Picture();
         picture.setUrl(uploadPictureResult.getUrl());
-        picture.setName(uploadPictureResult.getPicName());
+
+        // 设置图片名称, 如果没有设置那么就按照返回的信息设置, 如果有就设置为请求里面传入的信息
+        String picName = uploadPictureResult.getPicName();
+        if(pictureUploadRequest != null && StrUtil.isNotBlank(pictureUploadRequest.getPicName())){
+            picName = pictureUploadRequest.getPicName();
+        }
+        picture.setName(picName);
         picture.setPicSize(uploadPictureResult.getPicSize());
         picture.setPicWidth(uploadPictureResult.getPicWidth());
         picture.setPicHeight(uploadPictureResult.getPicHeight());
@@ -353,6 +368,79 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             // 非管理员操作, 添加和编辑都需要设置为待审核
             picture.setReviewStatus(PictureReviewStatusEnum.REVIEWING.getValue());
         }
+    }
+
+    /**
+     * 批量抓取和创建图片
+     *
+     * @param pictureUploadByBatchRequest
+     * @param loginUser
+     * @return 成功创建的图片数
+     */
+    @Override
+    public Integer uploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser) {
+        //参数校验
+        String searchText = pictureUploadByBatchRequest.getSearchText();
+        //ThrowUtils.throwIf(StrUtil.isBlank(searchText), ErrorCode.PARAMS_ERROR,"搜索参数不能为空!");
+        Integer count = pictureUploadByBatchRequest.getCount();
+        String namePrefix = pictureUploadByBatchRequest.getNamePrefix();
+        if (StrUtil.isBlank(namePrefix)) {
+            namePrefix = searchText;
+        }
+
+        ThrowUtils.throwIf(count >= PictureConstant.MAX_BATCH_SIZE, ErrorCode.PARAMS_ERROR,"抓取的图片数过多! 不能大于20条");
+        // 我们通过搜索引擎来随机抓取  -> 这里就用bing搜索引擎
+        String fetchUrl = String.format("https://cn.bing.com/images/async?q=%s&mmasync=1", searchText);
+        // 添加链接 抓取图片
+        Document document;
+        try{
+            document = Jsoup.connect(fetchUrl).get();
+        }catch (IOException e){
+            log.error("fail pictures batch due to url connnect :" + e.getMessage());
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,"抓取图片失败: 获取页面失败!");
+        }
+        // 解析文档来获取图片
+        Element div = document.getElementsByClass("dgControl").first();
+        ThrowUtils.throwIf(div == null, ErrorCode.OPERATION_ERROR,"获取元素失败");
+        Elements imgElements = div.select("img.mimg");
+        // 遍历每个元素, 上传图片
+        // 记录上传成功的数量
+        int uploadCount = 0;
+        for (Element ele : imgElements) {
+            // 取出图片的url
+            String url = ele.attr("src");
+            // 如果某一个url为空, 直接跳过
+            if (StrUtil.isBlank(url)){
+                log.info("current url is null ,skip" );
+                continue;
+            }
+            // 处理url 防止存在一些字符无法上传 & ? 这种
+            int index = url.indexOf("?");
+            if (index > -1){
+                url = url.substring(0, index);
+            }
+            //调用上传图片的方法上传
+            // 设置图片的默认名称
+            String picName = namePrefix + ( uploadCount+ 1  );
+
+            PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
+            pictureUploadRequest.setFileUrl(url);
+            pictureUploadRequest.setPicName(picName);
+
+            try{
+                PictureVO pictureVO = this.uploadPicture(url, pictureUploadRequest, loginUser);
+                log.info("upload picture successfully, current pictureId is : " + pictureVO.getId());
+                uploadCount++;
+            }catch (Exception e){
+                log.error("fail pictures batch due to upload by url" + e.getMessage());
+                continue;
+            }
+            //如果数量已经达到设置的上传数量 , 直接返回
+            if (uploadCount >= count){
+                break;
+            }
+        }
+        return uploadCount;
     }
 
 }
