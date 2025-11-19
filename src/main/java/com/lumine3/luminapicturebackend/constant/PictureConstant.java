@@ -7,4 +7,9 @@ public interface PictureConstant {
      */
     int MAX_BATCH_SIZE = 15;
 
+    /**
+     * 设置图片缩略图的宽高
+     */
+    int THUMBNAIL_SIZE = 256;
+
 }

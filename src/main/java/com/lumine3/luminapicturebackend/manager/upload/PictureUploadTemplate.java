@@ -3,6 +3,7 @@
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.NumberUtil;
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
 import com.lumine3.luminapicturebackend.config.COSClientConfig;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
@@ -10,17 +11,19 @@ import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.manager.COSManager;
 import com.lumine3.luminapicturebackend.model.dto.file.UploadPictureResult;
 import com.qcloud.cos.model.PutObjectResult;
+import com.qcloud.cos.model.ciModel.persistence.CIObject;
 import com.qcloud.cos.model.ciModel.persistence.ImageInfo;
+import com.qcloud.cos.model.ciModel.persistence.ProcessResults;
 import lombok.extern.slf4j.Slf4j;
 
 
 import javax.annotation.Resource;
 import java.io.File;
 import java.util.Date;
+import java.util.List;
 
 
-
-@Slf4j
+ @Slf4j
 public abstract class PictureUploadTemplate {
 
     @Resource
@@ -52,6 +55,21 @@ public abstract class PictureUploadTemplate {
             //解析文件信息
             // 获取图片信息对象
             ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
+            // 获取进过处理之后的图片
+            ProcessResults processResults = putObjectResult.getCiUploadResult().getProcessResults();
+            List<CIObject> processedLists = processResults.getObjectList();
+            if (ObjectUtil.isNotEmpty(processedLists)){
+                // 压缩后的图片
+                CIObject compressedObj = processedLists.get(0);
+                // 缩略图
+                CIObject thumbnailObj = compressedObj;
+
+                if (processedLists.size() > 1) {
+                    thumbnailObj = processedLists.get(1);
+                }
+
+                return buildResult(originalFilename,compressedObj,thumbnailObj);
+            }
             // 封装返回结果
             // 5. 封装返回结果
             return buildResult(originalFilename, file, uploadPath, imageInfo);
@@ -117,4 +135,23 @@ public abstract class PictureUploadTemplate {
             }
         }
     }
-}
+
+     private UploadPictureResult buildResult(String originFilename, CIObject compressedCiObject, CIObject thumbnailCiObject) {
+         UploadPictureResult uploadPictureResult = new UploadPictureResult();
+         int picWidth = compressedCiObject.getWidth();
+         int picHeight = compressedCiObject.getHeight();
+         double picScale = NumberUtil.round(picWidth * 1.0 / picHeight, 2).doubleValue();
+         uploadPictureResult.setPicName(FileUtil.mainName(originFilename));
+         uploadPictureResult.setPicWidth(picWidth);
+         uploadPictureResult.setPicHeight(picHeight);
+         uploadPictureResult.setPicScale(picScale);
+         uploadPictureResult.setPicFormat(compressedCiObject.getFormat());
+         uploadPictureResult.setPicSize(compressedCiObject.getSize().longValue());
+         // 设置图片为压缩后的地址
+         uploadPictureResult.setUrl(cosClientConfig.getHost() + "/" + compressedCiObject.getKey());
+         // 设置缩略图
+         uploadPictureResult.setThumbnailUrl(cosClientConfig.getHost() + "/" + thumbnailCiObject.getKey());
+         return uploadPictureResult;
+     }
+
+ }

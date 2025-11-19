@@ -24,7 +24,7 @@ public class UrlPictureUpload extends PictureUploadTemplate {
      * 图片后缀类型
      *
      */
-     private final AtomicReference<String> imgTypeRef = new AtomicReference<>();
+    // private final AtomicReference<String> imgTypeRef = new AtomicReference<>();
 
 
     @Override
@@ -36,14 +36,14 @@ public class UrlPictureUpload extends PictureUploadTemplate {
     @Override
     protected String getOriginalFilename(Object inputSource) {
         String fileUrl = (String) inputSource;
-        String suffix = FileUtil.getSuffix(fileUrl);
+        /*String suffix = FileUtil.getSuffix(fileUrl);
 
         final List<String> ALLOW_CONTENT_TYPES = Arrays.asList("image/jpeg", "image/jpg", "image/png", "image/webp");
 
         if (!ALLOW_CONTENT_TYPES.contains(suffix)) {
             fileUrl = fileUrl + imgTypeRef.get();
-        }
-        return FileUtil.getName(fileUrl);
+        }*/
+        return FileUtil.mainName(fileUrl);
     }
 
     @Override
@@ -80,7 +80,7 @@ public class UrlPictureUpload extends PictureUploadTemplate {
                 for (String imgType : ALLOW_CONTENT_TYPES) {
                     // 如果格式符合
                     if (imgType.equalsIgnoreCase(contentType)) {
-                        imgTypeRef.set("." +imgType.substring(imgType.indexOf("/") + 1));
+                       // imgTypeRef.set("." +imgType.substring(imgType.indexOf("/") + 1));
                         isPermit = true;
                         break;
                     }

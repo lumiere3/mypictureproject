@@ -4,10 +4,10 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.lumine3.luminapicturebackend.annotation.AuthCheck;
 import com.lumine3.luminapicturebackend.common.BaseResponse;
 import com.lumine3.luminapicturebackend.common.DeleteRequest;
+import com.lumine3.luminapicturebackend.config.LocalCacheConfig;
 import com.lumine3.luminapicturebackend.common.ResultUtils;
 import com.lumine3.luminapicturebackend.constant.UserConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
@@ -32,7 +32,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -51,16 +50,11 @@ public class PictureController {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-
     /**
      * 构建本地缓存 caffeine实现 为了方便直接在controller里面使用
      */
-    private final Cache<String, String> LOCAL_CACHE = Caffeine.newBuilder()
-            .initialCapacity(1024)
-            .maximumSize(10_000L)
-            .expireAfterWrite(Duration.ofMinutes(5)) //过期时间 5分钟
-            .build();
-
+    @Resource
+    private Cache<String,String> localCacheByCaffeine;
 
     /**
      * 上传图片
@@ -227,6 +221,7 @@ public class PictureController {
 
     /**
      * 分页获取图片列表（封装类） -> 这里使用了缓存
+     * 我们使用多级缓存进行 包括本地缓存caffeine 和 Redis 缓存
      */
     @PostMapping("/list/page/vo/cache")
     public BaseResponse<Page<PictureVO>> listPictureVOByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest,
@@ -237,23 +232,33 @@ public class PictureController {
         ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
         // 用户只能看到审核通过的图片
         pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
-        // 引入了缓存, 因此我们在查询数据库之前, 应该前尝试从缓存获取
+        // 引入了缓存, 因此我们在查询数据库之前, 应该前尝试从缓存获取  请求 -> 本地缓存 -> redis -> 数据库
         // 构建缓存的key + 注意需要加入查询条件 -> 我们需要把查询条件序列化
         String queryJSON = JSONUtil.toJsonStr(pictureQueryRequest);
         //json可能长度很长 , 以此需要进行转化 使用md5
         String hashKey = DigestUtils.md5DigestAsHex(queryJSON.getBytes());
         // 拼接成为key
         String cacheKey = String.format("lumina-picture:listPictureVOByPage:%s", hashKey);
-        //操作redis进行查询
-        ValueOperations<String, String> opsForValue = stringRedisTemplate.opsForValue();
-        String cachedValue = opsForValue.get(cacheKey);
-        if (cachedValue != null) {
+        //1 先从本地缓存里面获取
+        String cachedValue = localCacheByCaffeine.getIfPresent(cacheKey);
+        if (cachedValue != null) { //如果本地缓存存在
             // 把value转成对象返回
             Page<PictureVO> cacheBean = JSONUtil.toBean(cachedValue, Page.class);
             return ResultUtils.success(cacheBean);
         }
-        // 缓存不存在就查询数据库
-        // 查询数据库
+        //2. 再去Redis分布式缓存里面获取
+        ValueOperations<String, String> opsForValue = stringRedisTemplate.opsForValue();
+        cachedValue = opsForValue.get(cacheKey);
+        // 如果存在, 先更新本地缓存 让后返回
+        if (cachedValue != null) {
+            // 更新本地缓存
+            localCacheByCaffeine.put(cacheKey, cachedValue);
+            Page<PictureVO> cacheBean = JSONUtil.toBean(cachedValue, Page.class);
+            return ResultUtils.success(cacheBean);
+        }
+
+        // 两级缓存都不存在就查询数据库
+        //3. 查询数据库
         Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
                 pictureService.getQueryWrapper(pictureQueryRequest));
         // 获取封装类
@@ -262,7 +267,9 @@ public class PictureController {
         String cacheValue = JSONUtil.toJsonStr(pictureVOPage);
         //设置过期时间 5-10分钟随机
         int expireTime = 300 + RandomUtil.randomInt(0,300);
+        //4. 写入缓存, 此时需要同时写入caffeine和redis
         opsForValue.set(cacheKey, cacheValue, expireTime, TimeUnit.SECONDS);
+        localCacheByCaffeine.put(cacheKey,cacheValue);
         return ResultUtils.success(pictureVOPage);
     }
 
