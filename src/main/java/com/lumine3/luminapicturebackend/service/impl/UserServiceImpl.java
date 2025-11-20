@@ -276,10 +276,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         //获取数据
         User user = new User();
         BeanUtil.copyProperties(userAddRequest,user);
-        // todo 现在我们不能上传头像, 因此我们设置一个默认头像
-        if(userAddRequest.getUserAvatar() == null || userAddRequest.getUserAvatar().equals("")){
+        /*if(userAddRequest.getUserAvatar() == null || userAddRequest.getUserAvatar().equals("")){
             user.setUserAvatar("https://web-isyal.oss-cn-beijing.aliyuncs.com/%E5%A4%B4%E5%83%8F/1721148175325.jpg");
-        }
+        }*/
         //填充默认密码
         String defaultPassword = doPasswordEncryption(UserConstant.DEFAULT_PASSWORD);
         user.setUserPassword(defaultPassword);

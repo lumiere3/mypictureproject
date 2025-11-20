@@ -12,4 +12,10 @@ public interface PictureConstant {
      */
     int THUMBNAIL_SIZE = 256;
 
+    /**
+     * 主页缓存的前缀
+     * 缓存 Page<Picture<VO>>
+     */
+    String HOME_PAGE_CACHE = "lumina-picture:listPictureVOByPage:";
+
 }

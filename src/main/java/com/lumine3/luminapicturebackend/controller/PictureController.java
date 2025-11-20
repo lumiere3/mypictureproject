@@ -9,6 +9,7 @@ import com.lumine3.luminapicturebackend.common.BaseResponse;
 import com.lumine3.luminapicturebackend.common.DeleteRequest;
 import com.lumine3.luminapicturebackend.config.LocalCacheConfig;
 import com.lumine3.luminapicturebackend.common.ResultUtils;
+import com.lumine3.luminapicturebackend.constant.PictureConstant;
 import com.lumine3.luminapicturebackend.constant.UserConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
@@ -72,6 +73,7 @@ public class PictureController {
         //获取登录用户
         User loginUser = userService.getLoginUser(request);
         PictureVO pictureVO = pictureService.uploadPicture(file, pictureUploadRequest, loginUser);
+
         return ResultUtils.success(pictureVO);
     }
 
@@ -92,6 +94,7 @@ public class PictureController {
         //获取url
         String fileUrl = pictureUploadRequest.getFileUrl();
         PictureVO pictureVO = pictureService.uploadPicture(fileUrl, pictureUploadRequest, loginUser);
+        pictureService.cleanHomePageCache();
         return ResultUtils.success(pictureVO);
     }
 
@@ -126,6 +129,10 @@ public class PictureController {
         //校验完成, 删除图片
         boolean removed = pictureService.removeById(pictureId);
         ThrowUtils.throwIf(!removed, ErrorCode.OPERATION_ERROR);
+        // 清理COS的图片资源
+        pictureService.clearPictureFile(oldPicture);
+        //清理缓存
+        pictureService.cleanHomePageCache();
         return ResultUtils.success(true);
     }
 
@@ -156,6 +163,7 @@ public class PictureController {
         // 操作数据库
         boolean result = pictureService.updateById(picture);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        pictureService.cleanHomePageCache();
         return ResultUtils.success(true);
     }
 
@@ -238,7 +246,8 @@ public class PictureController {
         //json可能长度很长 , 以此需要进行转化 使用md5
         String hashKey = DigestUtils.md5DigestAsHex(queryJSON.getBytes());
         // 拼接成为key
-        String cacheKey = String.format("lumina-picture:listPictureVOByPage:%s", hashKey);
+         /*= String.format("lumina-picture:listPictureVOByPage:%s", hashKey);*/
+        String cacheKey = String.format("%s%s", PictureConstant.HOME_PAGE_CACHE,hashKey);
         //1 先从本地缓存里面获取
         String cachedValue = localCacheByCaffeine.getIfPresent(cacheKey);
         if (cachedValue != null) { //如果本地缓存存在
@@ -274,8 +283,6 @@ public class PictureController {
     }
 
 
-
-
     /**
      * 编辑图片（给用户使用）
      */
@@ -307,6 +314,7 @@ public class PictureController {
         // 操作数据库
         boolean result = pictureService.updateById(picture);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        pictureService.cleanHomePageCache();
         return ResultUtils.success(true);
     }
 
@@ -347,6 +355,7 @@ public class PictureController {
         // 获取当前的用户
         User loginUser = userService.getLoginUser(request);
         pictureService.doPictureReview(pictureReviewRequest, loginUser);
+        pictureService.cleanHomePageCache();
         return ResultUtils.success(true);
     }
 
@@ -365,6 +374,8 @@ public class PictureController {
         // 获取当前用户
         User loginUser = userService.getLoginUser(request);
         int uploadCount = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, loginUser);
+        pictureService.cleanHomePageCache();
         return ResultUtils.success(uploadCount);
     }
+
 }

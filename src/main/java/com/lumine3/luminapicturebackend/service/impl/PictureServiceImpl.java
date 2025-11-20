@@ -6,10 +6,13 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.lumine3.luminapicturebackend.config.LocalCacheConfig;
 import com.lumine3.luminapicturebackend.constant.PictureConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
+import com.lumine3.luminapicturebackend.manager.COSManager;
 import com.lumine3.luminapicturebackend.manager.FileManager;
 import com.lumine3.luminapicturebackend.manager.upload.FilePictureUpload;
 import com.lumine3.luminapicturebackend.manager.upload.PictureUploadTemplate;
@@ -34,12 +37,16 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +68,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     private FileManager fileManager;
 
     @Resource
+    private COSManager cosManager;
+
+    @Resource
     private UserService userService;
 
     @Resource
@@ -68,6 +78,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Resource
     private UrlPictureUpload urlPictureUpload;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private Cache<String, String> localCacheByCaffeine;
 
     /**
      * 文件上传接口
@@ -137,6 +152,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 2. 没有id就是新建
         boolean saved = this.saveOrUpdate(picture);
         ThrowUtils.throwIf(!saved, ErrorCode.OPERATION_ERROR, "图片新建或更新失败!");
+        // todo 更新操作 -> 本质就是上传新的图片来覆盖原来的
+        // 所以这里也需要删除原来图片在COS里面的值
+        cleanHomePageCache();
         // 构建返回VO
         return PictureVO.objToVo(picture);
     }
@@ -441,6 +459,56 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             }
         }
         return uploadCount;
+    }
+
+    /**
+     * 从COS里面清理图片
+     * 清理图片 -> 从COS里面清理文件
+     * @param oldPicture 老图片
+     */
+    @Async
+    @Override
+    public void clearPictureFile(Picture oldPicture) {
+        /*ThrowUtils.throwIf(oldPicture == null, ErrorCode.PARAMS_ERROR);*/
+        // 首先判断, 这个图片的url有多少条被引用到
+        String pictureUrl = oldPicture.getUrl();
+        Long count = this.lambdaQuery()
+                .eq(Picture::getUrl, pictureUrl)
+                .count();
+        // 大于1 则说明不止一个地方用到了, 删除图片可能不合理
+        if (count > 1){
+            return;
+        }
+        try {
+            // 否则, 我们删除COS里面的文件
+            cosManager.deleteObject(pictureUrl);
+            // 删除缩略图
+            String thumbnailUrl = oldPicture.getThumbnailUrl();
+            if (StrUtil.isNotBlank(thumbnailUrl)){
+                cosManager.deleteObject(thumbnailUrl);
+            }
+        } catch (MalformedURLException e) {
+            log.error("fail clearPictureFile due to url connnect :" + e.getMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"错误的图片URL");
+        }
+
+    }
+
+    /**
+     * 清理主页的缓存 -> 包括本地 和 redis 缓存
+     * 缓存的key已经确定
+     */
+    @Override
+    public void cleanHomePageCache() {
+        // 获取缓存 key的前缀
+        String prefix = PictureConstant.HOME_PAGE_CACHE;
+        // 清理本地缓存
+        localCacheByCaffeine.invalidateAll();
+        //清理Redis
+        Set<String> keys = stringRedisTemplate.keys(prefix + "*");
+        if (keys != null && !keys.isEmpty()) {
+            stringRedisTemplate.delete(keys);
+        }
     }
 
 }

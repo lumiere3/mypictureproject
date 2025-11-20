@@ -163,6 +163,7 @@ public class UserController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         User user = new User();
+        // todo 更新时, 如果头像被更新了, 可以去COS里删除原来的
         BeanUtil.copyProperties(userUpdateRequest,user);
         boolean updated = userService.updateById(user);
         ThrowUtils.throwIf(!updated,ErrorCode.OPERATION_ERROR,"更新用户失败!");

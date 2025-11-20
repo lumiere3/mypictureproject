@@ -8,15 +8,14 @@ import com.lumine3.luminapicturebackend.model.entity.Picture;
 import com.qcloud.cos.COSClient;
 import com.qcloud.cos.exception.CosClientException;
 import com.qcloud.cos.exception.CosServiceException;
-import com.qcloud.cos.model.COSObject;
-import com.qcloud.cos.model.GetObjectRequest;
-import com.qcloud.cos.model.PutObjectRequest;
-import com.qcloud.cos.model.PutObjectResult;
+import com.qcloud.cos.model.*;
 import com.qcloud.cos.model.ciModel.persistence.PicOperations;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -103,4 +102,13 @@ public class COSManager {
     }
 
 
+    /**
+     * delete
+     * 删除对象
+     */
+    public void deleteObject (String key) throws MalformedURLException {
+        //此时传入的key包含了域名, 需要去掉
+        String path = new URL(key).getPath();
+        cosClient.deleteObject(cosClientConfig.getBucket(), path);
+    }
 }

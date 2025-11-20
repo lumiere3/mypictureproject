@@ -43,7 +43,8 @@ public class UrlPictureUpload extends PictureUploadTemplate {
         if (!ALLOW_CONTENT_TYPES.contains(suffix)) {
             fileUrl = fileUrl + imgTypeRef.get();
         }*/
-        return FileUtil.mainName(fileUrl);
+        //使用 FileUtil.getName 获取完整的文件名（包含扩展名）
+        return FileUtil.getName(fileUrl);
     }
 
     @Override

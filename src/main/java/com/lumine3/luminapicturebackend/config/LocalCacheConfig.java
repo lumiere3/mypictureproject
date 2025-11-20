@@ -18,4 +18,8 @@ public class LocalCacheConfig {
                .expireAfterWrite(Duration.ofMinutes(5))
                .build();
    }
+
+   public void cleanLocalCache(){
+        localCacheByCaffeine().invalidateAll();
+   }
 }

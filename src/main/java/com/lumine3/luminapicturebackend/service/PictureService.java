@@ -88,4 +88,16 @@ public interface PictureService extends IService<Picture> {
             User loginUser
     );
 
+
+    /**
+     * 清理图片文件 --> 清理COS的图片文件
+     *
+     */
+    void clearPictureFile(Picture oldPicture);
+
+    /**
+     * 清理主页缓存 包括本地缓存caffeine 和 redis 缓存
+     *
+     */
+    void cleanHomePageCache();
 }
