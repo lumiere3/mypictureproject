@@ -12,12 +12,10 @@ import com.lumine3.luminapicturebackend.constant.UserConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
-import com.lumine3.luminapicturebackend.model.dto.space.SpaceAddRequest;
-import com.lumine3.luminapicturebackend.model.dto.space.SpaceEditRequest;
-import com.lumine3.luminapicturebackend.model.dto.space.SpaceQueryRequest;
-import com.lumine3.luminapicturebackend.model.dto.space.SpaceUpdateRequest;
+import com.lumine3.luminapicturebackend.model.dto.space.*;
 import com.lumine3.luminapicturebackend.model.entity.Space;
 import com.lumine3.luminapicturebackend.model.entity.User;
+import com.lumine3.luminapicturebackend.model.enums.SpaceLevelEnum;
 import com.lumine3.luminapicturebackend.model.vo.SpaceVO;
 import com.lumine3.luminapicturebackend.model.vo.UserAvatarVO;
 import com.lumine3.luminapicturebackend.service.SpaceService;
@@ -36,6 +34,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/space")
@@ -202,7 +201,13 @@ public class SpaceController {
         return ResultUtils.success(true);
     }
 
-
+    /**
+     * 新增空间
+     * @param spaceAddRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/add")
     public BaseResponse<Long> addSpace(@RequestBody SpaceAddRequest spaceAddRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(spaceAddRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(request);
@@ -211,5 +216,21 @@ public class SpaceController {
     }
 
 
+    /**
+     * 获取空间的级别信息 -> 用于前端展示
+     * @return 空间列表
+     */
+    @GetMapping("/list/level")
+    public BaseResponse<List<SpaceLevel>> listSpaceLevel(){
+        // 创建我们当前已有的空间
+        List<SpaceLevel> spaceLevelList = Arrays.stream(SpaceLevelEnum.values())
+                .map(spaceLevelEnum -> new SpaceLevel(
+                        spaceLevelEnum.getValue(),
+                        spaceLevelEnum.getText(),
+                        spaceLevelEnum.getMaxCount(),
+                        spaceLevelEnum.getMaxSize())
+                ).collect(Collectors.toList());
+        return ResultUtils.success(spaceLevelList);
+    }
 }
 
