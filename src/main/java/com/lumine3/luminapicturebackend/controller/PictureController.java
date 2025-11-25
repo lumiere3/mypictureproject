@@ -7,7 +7,6 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.lumine3.luminapicturebackend.annotation.AuthCheck;
 import com.lumine3.luminapicturebackend.common.BaseResponse;
 import com.lumine3.luminapicturebackend.common.DeleteRequest;
-import com.lumine3.luminapicturebackend.config.LocalCacheConfig;
 import com.lumine3.luminapicturebackend.common.ResultUtils;
 import com.lumine3.luminapicturebackend.constant.PictureConstant;
 import com.lumine3.luminapicturebackend.constant.UserConstant;
@@ -16,12 +15,14 @@ import com.lumine3.luminapicturebackend.exception.ErrorCode;
 import com.lumine3.luminapicturebackend.exception.ThrowUtils;
 import com.lumine3.luminapicturebackend.model.dto.picture.*;
 import com.lumine3.luminapicturebackend.model.entity.Picture;
+import com.lumine3.luminapicturebackend.model.entity.Space;
 import com.lumine3.luminapicturebackend.model.entity.User;
 import com.lumine3.luminapicturebackend.model.enums.PictureReviewStatusEnum;
 import com.lumine3.luminapicturebackend.model.vo.PictureTagCategory;
 import com.lumine3.luminapicturebackend.model.vo.PictureVO;
 import com.lumine3.luminapicturebackend.model.vo.UserAvatarVO;
 import com.lumine3.luminapicturebackend.service.PictureService;
+import com.lumine3.luminapicturebackend.service.SpaceService;
 import com.lumine3.luminapicturebackend.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -34,8 +35,8 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 @RestController
@@ -47,10 +48,13 @@ public class PictureController {
     private PictureService pictureService;
     @Resource
     private UserService userService;
+
+    @Resource
+    private SpaceService spaceService;
+
     // 引入Redis
     @Resource
     private StringRedisTemplate stringRedisTemplate;
-
     /**
      * 构建本地缓存 caffeine实现 为了方便直接在controller里面使用
      */
@@ -113,27 +117,23 @@ public class PictureController {
         // 权限校验, 这里应该是两种情况: 1.管理员 -> 可以删除 2.图片的上传者 -> 可以删除
         User loginUser = userService.getLoginUser(request);
         long pictureId = deleteRequest.getId();
-        //查询当前图片
+        pictureService.deletePicture(pictureId, loginUser);
+        return ResultUtils.success(true);
+       /* //查询当前图片
         Picture oldPicture = pictureService.getById(pictureId);
        //图片必须存在
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
         // 没有登录肯定不行
         ThrowUtils.throwIf(loginUser == null ,ErrorCode.NO_AUTH_ERROR ,"用户未登录, 无法删除!");
         // 校验权限
-        boolean admin = userService.isAdmin(loginUser);
-        if (!admin) {
-            // 不是管理员, 那么校验是否是用户本人 -> 指这个图片是不是当前用户上传的
-            Long userId = oldPicture.getUserId();
-            ThrowUtils.throwIf(!userId.equals(loginUser.getId()),ErrorCode.NO_AUTH_ERROR);
-        }
+        pictureService.checkPictureAuth(loginUser,oldPicture);
         //校验完成, 删除图片
         boolean removed = pictureService.removeById(pictureId);
         ThrowUtils.throwIf(!removed, ErrorCode.OPERATION_ERROR);
         // 清理COS的图片资源
         pictureService.clearPictureFile(oldPicture);
         //清理缓存
-        pictureService.cleanHomePageCache();
-        return ResultUtils.success(true);
+        pictureService.cleanHomePageCache();*/
     }
 
 
@@ -190,6 +190,11 @@ public class PictureController {
         // 查询数据库
         Picture picture = pictureService.getById(id);
         ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR);
+        //校验权限 -> 如果不是公共空间
+        Long spaceId = picture.getSpaceId();
+        if (spaceId != null) {
+            pictureService.checkPictureAuth(userService.getLoginUser(request),picture);
+        }
         // 获取封装类
         return ResultUtils.success(pictureService.getPictureVO(picture, request));
     }
@@ -218,8 +223,23 @@ public class PictureController {
         long size = pictureQueryRequest.getPageSize();
         // 限制爬虫
         ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
-        // 用户只能看到审核通过的图片
-        pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+        // 空间权限校验
+        Long spaceId = pictureQueryRequest.getSpaceId();
+        if (spaceId == null) {
+            //公开图库
+            // 用户只能看到审核通过的图片
+            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+            pictureQueryRequest.setNullSpaceId(true);
+        }else{
+            // 私有的图库就需要校验权限了
+            User loginUser = userService.getLoginUser(request);
+            //空间必须存在
+            Space space = spaceService.getById(spaceId);
+            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR,"空间不存在!");
+            if (!Objects.equals(loginUser.getId(), space.getUserId())){
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"没有访问当前空间的权限!");
+            }
+        }
         // 查询数据库
         Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
                 pictureService.getQueryWrapper(pictureQueryRequest));
@@ -265,8 +285,24 @@ public class PictureController {
             Page<PictureVO> cacheBean = JSONUtil.toBean(cachedValue, Page.class);
             return ResultUtils.success(cacheBean);
         }
-
         // 两级缓存都不存在就查询数据库
+        // 空间权限校验
+        Long spaceId = pictureQueryRequest.getSpaceId();
+        if (spaceId == null) {
+            //公开图库
+            // 用户只能看到审核通过的图片
+            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+            pictureQueryRequest.setNullSpaceId(true);
+        }else{
+            // 私有的图库就需要校验权限了
+            User loginUser = userService.getLoginUser(request);
+            //空间必须存在
+            Space space = spaceService.getById(spaceId);
+            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR,"空间不存在!");
+            if (!Objects.equals(loginUser.getId(), space.getUserId())){
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"没有访问当前空间的权限!");
+            }
+        }
         //3. 查询数据库
         Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
                 pictureService.getQueryWrapper(pictureQueryRequest));
@@ -291,7 +327,10 @@ public class PictureController {
         if (pictureEditRequest == null || pictureEditRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        // 在此处将实体类和 DTO 进行转换
+        User loginUser = userService.getLoginUser(request);
+        pictureService.editPicture(pictureEditRequest,loginUser);
+        return ResultUtils.success(true);
+       /* // 在此处将实体类和 DTO 进行转换
         Picture picture = new Picture();
         BeanUtils.copyProperties(pictureEditRequest, picture);
         // 注意将 list 转为 string
@@ -307,15 +346,16 @@ public class PictureController {
         long id = pictureEditRequest.getId();
         Picture oldPicture = pictureService.getById(id);
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
-        // 仅本人或管理员可编辑
-        if (!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
+        // 校验权限
+        *//*if (!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
-        }
+        }*//*
+        pictureService.checkPictureAuth(loginUser, oldPicture);
         // 操作数据库
         boolean result = pictureService.updateById(picture);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
-        pictureService.cleanHomePageCache();
-        return ResultUtils.success(true);
+        //清理主页缓存
+        pictureService.cleanHomePageCache();*/
     }
 
     @GetMapping("/tag_category")

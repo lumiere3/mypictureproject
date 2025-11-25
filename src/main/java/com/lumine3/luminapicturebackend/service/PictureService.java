@@ -2,10 +2,7 @@ package com.lumine3.luminapicturebackend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.lumine3.luminapicturebackend.model.dto.picture.PictureQueryRequest;
-import com.lumine3.luminapicturebackend.model.dto.picture.PictureReviewRequest;
-import com.lumine3.luminapicturebackend.model.dto.picture.PictureUploadByBatchRequest;
-import com.lumine3.luminapicturebackend.model.dto.picture.PictureUploadRequest;
+import com.lumine3.luminapicturebackend.model.dto.picture.*;
 import com.lumine3.luminapicturebackend.model.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lumine3.luminapicturebackend.model.entity.User;
@@ -34,6 +31,7 @@ public interface PictureService extends IService<Picture> {
                             User loginUser);
 
 
+
     /**
      * 获取QueryWrapper
      *
@@ -41,6 +39,10 @@ public interface PictureService extends IService<Picture> {
      * @return QueryWrapper
      */
     QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest);
+
+    void deletePicture(long pictureId, User loginUser);
+
+    void editPicture(PictureEditRequest pictureEditRequest, User loginUser);
 
     /**
      * 图片包装类 -> 单条
@@ -58,6 +60,10 @@ public interface PictureService extends IService<Picture> {
      */
     Page<PictureVO> getPictureVOPage(Page<Picture> picturePage, HttpServletRequest request);
 
+    /**
+     * 图片校验
+     * @param picture
+     */
     void validPicture(Picture picture);
 
 
@@ -73,6 +79,11 @@ public interface PictureService extends IService<Picture> {
      */
     void doPictureReview(PictureReviewRequest pictureReviewRequest, User user);
 
+    /**
+     * 填充审核信息
+     * @param picture
+     * @param user
+     */
     void fillReviewParams(Picture picture, User user);
 
 
@@ -100,4 +111,6 @@ public interface PictureService extends IService<Picture> {
      *
      */
     void cleanHomePageCache();
+
+    void checkPictureAuth(User loginUser, Picture picture);
 }
