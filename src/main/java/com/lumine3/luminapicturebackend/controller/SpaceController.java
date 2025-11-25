@@ -77,6 +77,8 @@ public class SpaceController {
         //校验完成, 删除空间
         boolean removed = spaceService.removeById(spaceId);
         ThrowUtils.throwIf(!removed, ErrorCode.OPERATION_ERROR);
+        // todo 删除空间也应该删除空间里面关联的图片
+
         return ResultUtils.success(true);
     }
 
