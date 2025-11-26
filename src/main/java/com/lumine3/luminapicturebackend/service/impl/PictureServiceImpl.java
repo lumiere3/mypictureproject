@@ -103,7 +103,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (spaceId != null) {
             // 判断空间是否存在
             Space curSpace = spaceService.getById(spaceId);
-            if (curSpace != null) {
+            if (curSpace == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND_ERROR,"未找到当前空间!");
             }
             //权限校验
@@ -193,12 +193,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         transactionTemplate.execute(status -> {
             boolean saved = this.saveOrUpdate(picture);
             ThrowUtils.throwIf(!saved, ErrorCode.OPERATION_ERROR, "图片新建或更新失败!");
-            boolean updated = spaceService.lambdaUpdate()// todo 更新额度
-                    .eq(Space::getId, finalSpaceId)
-                    .setSql("totalSize = totalSize + " + picture.getPicSize())
-                    .setSql("totalCount = totalCount + 1")
-                    .update();
-            ThrowUtils.throwIf(!updated,ErrorCode.OPERATION_ERROR,"空间更新失败!");
+            if (finalSpaceId != null) {
+                boolean updated = spaceService.lambdaUpdate()// todo 更新额度
+                        .eq(Space::getId, finalSpaceId)
+                        .setSql("totalSize = totalSize + " + picture.getPicSize())
+                        .setSql("totalCount = totalCount + 1")
+                        .update();
+                ThrowUtils.throwIf(!updated,ErrorCode.OPERATION_ERROR,"空间更新失败!");
+            }
            return null;
         });
 
