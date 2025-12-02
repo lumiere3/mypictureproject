@@ -31,7 +31,6 @@ import com.lumine3.luminapicturebackend.mapper.PictureMapper;
 import com.lumine3.luminapicturebackend.service.SpaceService;
 import com.lumine3.luminapicturebackend.service.UserService;
 import lombok.extern.slf4j.Slf4j;
-import net.bytebuddy.implementation.bytecode.Throw;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
