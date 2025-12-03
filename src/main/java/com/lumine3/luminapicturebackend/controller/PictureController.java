@@ -5,6 +5,8 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.lumine3.luminapicturebackend.annotation.AuthCheck;
+import com.lumine3.luminapicturebackend.api.imagesearch.ImageSearchApiFacade;
+import com.lumine3.luminapicturebackend.api.imagesearch.model.ImageSearchResult;
 import com.lumine3.luminapicturebackend.common.BaseResponse;
 import com.lumine3.luminapicturebackend.common.DeleteRequest;
 import com.lumine3.luminapicturebackend.common.ResultUtils;
@@ -416,6 +418,31 @@ public class PictureController {
         int uploadCount = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, loginUser);
         pictureService.cleanHomePageCache();
         return ResultUtils.success(uploadCount);
+    }
+
+
+    /**
+     * 以图搜图
+     * @param searchPictureByPictureRequest
+     * @return
+     */
+    @PostMapping("/search/picture")
+    public BaseResponse<List<ImageSearchResult>> searchPictureByPicture(@RequestBody SearchPictureByPictureRequest searchPictureByPictureRequest
+                                                                       ){
+        ThrowUtils.throwIf(searchPictureByPictureRequest == null,ErrorCode.PARAMS_ERROR);
+        Long pictureId = searchPictureByPictureRequest.getPictureId();
+        ThrowUtils.throwIf(pictureId == null,ErrorCode.PARAMS_ERROR);
+
+        //查询当前图片
+        Picture picture = pictureService.getById(pictureId);
+        ThrowUtils.throwIf(picture == null,ErrorCode.NOT_FOUND_ERROR);
+
+        //获取图片的url
+        String pictureUrl = picture.getUrl();
+
+        //调用以图搜图API
+        List<ImageSearchResult> imageSearchResults = ImageSearchApiFacade.getImageSearchResults(pictureUrl);
+        return ResultUtils.success(imageSearchResults);
     }
 
 }
