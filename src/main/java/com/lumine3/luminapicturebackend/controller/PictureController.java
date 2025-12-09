@@ -445,4 +445,30 @@ public class PictureController {
         return ResultUtils.success(imageSearchResults);
     }
 
+
+    @PostMapping("/search/color")
+    public BaseResponse<List<PictureVO>> searchPictureByColor(@RequestBody SearchPictureByColorRequest searchPictureByColorRequest,
+                                                              HttpServletRequest request){
+        ThrowUtils.throwIf(searchPictureByColorRequest == null,ErrorCode.PARAMS_ERROR);
+        String color = searchPictureByColorRequest.getPicColor();
+        Long spaceId = searchPictureByColorRequest.getSpaceId();
+        User loginUser = userService.getLoginUser(request);
+        List<PictureVO> pictureVOList = pictureService.searchPictureByColorsInPrivate(spaceId, color, loginUser);
+        return ResultUtils.success(pictureVOList);
+    }
+
+
+    /**
+     * 批量编辑图片
+     * @param pictureEditBatchRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/edit/batch")
+    public BaseResponse<Boolean> editPictureByBatch(@RequestBody PictureEditByBatchRequest pictureEditBatchRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(pictureEditBatchRequest == null,ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        pictureService.editPictureByBatch(pictureEditBatchRequest, loginUser);
+        return ResultUtils.success(true);
+    }
 }

@@ -10,6 +10,7 @@ import com.lumine3.luminapicturebackend.model.vo.PictureVO;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
 * @author Asus
@@ -113,4 +114,22 @@ public interface PictureService extends IService<Picture> {
     void cleanHomePageCache();
 
     void checkPictureAuth(User loginUser, Picture picture);
+
+    /**
+     * 通过图片主色调查询图片
+     * @param SpaceId
+     * @param colors
+     * @param loginUser
+     * @return
+     */
+    List<PictureVO> searchPictureByColorsInPrivate(Long SpaceId, String colors, User loginUser);
+
+
+    /**
+     * 批量修改图片
+     *
+     * @param pictureEditByBatchRequest
+     * @param loginUser
+     */
+    void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser);
 }

@@ -30,7 +30,10 @@ import com.lumine3.luminapicturebackend.service.PictureService;
 import com.lumine3.luminapicturebackend.mapper.PictureMapper;
 import com.lumine3.luminapicturebackend.service.SpaceService;
 import com.lumine3.luminapicturebackend.service.UserService;
+import com.lumine3.luminapicturebackend.utils.ColorSimilarUtils;
+import com.lumine3.luminapicturebackend.utils.ColorTransformUtils;
 import lombok.extern.slf4j.Slf4j;
+import net.bytebuddy.implementation.bytecode.Throw;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -43,9 +46,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.awt.*;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -176,6 +181,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         picture.setPicHeight(uploadPictureResult.getPicHeight());
         picture.setPicScale(uploadPictureResult.getPicScale());
         picture.setPicFormat(uploadPictureResult.getPicFormat());
+        // 设置正确格式的颜色
+        picture.setPicColor(ColorTransformUtils.getStandardColor(uploadPictureResult.getPicColor()));
         picture.setUserId(loginUser.getId());
 
         //补充审核参数
@@ -665,6 +672,137 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             }
         }
     }
+
+    /**
+     * 用于私有空间
+     * @param spaceId
+     * @param colors
+     * @param loginUser
+     * @return
+     */
+    @Override
+    public List<PictureVO> searchPictureByColorsInPrivate(Long spaceId, String colors, User loginUser) {
+        // 参数校验
+        ThrowUtils.throwIf(spaceId == null || StrUtil.isBlank(colors),ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null ,ErrorCode.NO_AUTH_ERROR);
+        // 权限校验 - 所属空间必须存在
+        Space space = spaceService.getById(spaceId);
+        if (space == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR,"空间不存在！");
+        }
+        //空间必须是当前用户的
+        if (!space.getUserId().equals(loginUser.getId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"无权限访问！当前空间不属于登录用户");
+        }
+        // 查询当前空间所有含有主色调的图片
+        List<Picture> picLists = this.lambdaQuery()
+                .eq(Picture::getSpaceId, spaceId)
+                .isNotNull(Picture::getPicColor)
+                .list();
+        if (CollUtil.isEmpty(picLists)){
+            return new ArrayList<>(); //没有图片返回空集合
+        }
+        //根据图片的主色调排序
+        Color targetColor = Color.decode(colors); //目标颜色
+        List<Picture> sortedPic = picLists
+                .stream()
+                .sorted(Comparator.comparingDouble(picture -> {
+                    // 比较颜色
+                    String hex = picture.getPicColor();
+                    if (StrUtil.isBlank(hex)) {
+                        return Double.MAX_VALUE; //设置为最大， 因为我们最相似的设置为负值
+                    }
+                    Color current = Color.decode(hex);
+                    return -ColorSimilarUtils.calculateSimilarity(targetColor, current);
+                }))
+                .limit(12)
+                .collect(Collectors.toList());
+        //转换成VO返回
+        return sortedPic.stream().map(PictureVO::objToVo).collect(Collectors.toList());
+    }
+
+    /**
+     * 批量修改图片
+     *
+     * @param pictureEditByBatchRequest
+     * @param loginUser
+     */
+    @Override
+    public void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser) {
+        // 参数校验
+        List<Long> pictureIdList = pictureEditByBatchRequest.getPictureIdList();
+        Long spaceId = pictureEditByBatchRequest.getSpaceId();
+        String category = pictureEditByBatchRequest.getCategory();
+        List<String> tags = pictureEditByBatchRequest.getTags();
+        ThrowUtils.throwIf(CollUtil.isEmpty(pictureIdList),ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null ,ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(spaceId == null ,ErrorCode.PARAMS_ERROR);
+        // 空间权限校验
+        // - 所属空间必须存在
+        Space space = spaceService.getById(spaceId);
+        ThrowUtils.throwIf(space == null,ErrorCode.NOT_FOUND_ERROR,"空间不存在！");
+        // 空间必须是当前用户的
+        ThrowUtils.throwIf(!space.getUserId().equals(loginUser.getId()),ErrorCode.NO_AUTH_ERROR,"无空间权限！当前空间不属于登录用户");
+        // 查询指定图片 仅选择需要修改的字段
+        List<Picture> pictureList = this.lambdaQuery()
+                .select(Picture::getId, Picture::getSpaceId)
+                .eq(Picture::getSpaceId, spaceId)
+                .in(Picture::getId, pictureIdList)
+                .list();
+        // 判断结果是否为空
+        if (CollUtil.isEmpty(pictureList)){
+            return;
+        }
+        // 更新字段数据
+        for (Picture picture : pictureList) {
+            if(StrUtil.isNotBlank( category)){
+                picture.setCategory(category);
+            }
+            if (CollUtil.isNotEmpty(tags)){
+                picture.setTags(JSONUtil.toJsonStr(tags));
+            }
+        }
+        // 批量重命名
+        String nameRule = pictureEditByBatchRequest.getNameRule();
+        fillPictureWithNameRule(pictureList, nameRule);
+
+
+        // 批量更新 调用数据库 - 添加事务
+        transactionTemplate.execute(status -> {
+            boolean result = this.updateBatchById(pictureList);
+            if (!result){
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,"批量修改图片失败！");
+            }
+            return null;
+        });
+        cleanHomePageCache();
+    }
+
+
+    /**
+     * 批量重命名自动填充 - 用于批量修改图片名称的位置 - 根据名称规则， 自动填充图片名称
+     * 目前支持的格式 ：名称{序号}
+     * @param pictureList
+     * @param nameRule
+     */
+    private void fillPictureWithNameRule(List<Picture> pictureList, String nameRule) {
+        if ( CollUtil.isEmpty(pictureList) || StrUtil.isBlank(nameRule)) {
+            return;
+        }
+        int index = 1; // 定义序号
+
+        try{
+            for (Picture picture : pictureList) {
+                String name = nameRule.replaceAll("\\{序号}", String.valueOf(index));
+                picture.setName(name);
+                index++;
+            }
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,"批量修改图片名称失败！名称解析错误！" );
+        }
+    }
+
+
 
 
 }
