@@ -1,5 +1,6 @@
 package com.lumine3.luminapicturebackend.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
@@ -9,6 +10,9 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.benmanes.caffeine.cache.Cache;
+import com.lumine3.luminapicturebackend.api.aliyunai.AliYunAiApi;
+import com.lumine3.luminapicturebackend.api.aliyunai.model.CreateOutPaintingTaskRequest;
+import com.lumine3.luminapicturebackend.api.aliyunai.model.CreateOutPaintingTaskResponse;
 import com.lumine3.luminapicturebackend.constant.PictureConstant;
 import com.lumine3.luminapicturebackend.exception.BusinessException;
 import com.lumine3.luminapicturebackend.exception.ErrorCode;
@@ -33,7 +37,6 @@ import com.lumine3.luminapicturebackend.service.UserService;
 import com.lumine3.luminapicturebackend.utils.ColorSimilarUtils;
 import com.lumine3.luminapicturebackend.utils.ColorTransformUtils;
 import lombok.extern.slf4j.Slf4j;
-import net.bytebuddy.implementation.bytecode.Throw;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -86,6 +89,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     private StringRedisTemplate stringRedisTemplate;
     @Resource
     private Cache<String, String> localCacheByCaffeine;
+
+    @Resource
+    private AliYunAiApi aliYunAiApi;
 
     //事务
     @Resource
@@ -776,6 +782,32 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             return null;
         });
         cleanHomePageCache();
+    }
+
+    /**
+     * AI扩图任务
+     *
+     * @param createPictureOutPaintingTaskRequest
+     * @param loginUser
+     */
+    @Override
+    public CreateOutPaintingTaskResponse createPictureOutPaintingByAI(CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest, User loginUser) {
+        // 获取图片信息
+        Long pictureId = createPictureOutPaintingTaskRequest.getPictureId();
+        Picture picture = this.getById(pictureId);
+        Optional.ofNullable(picture).orElseThrow(() -> {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR,"图片不存在！");
+        });
+        //权限校验
+        checkPictureAuth(loginUser, picture);
+        // 构造请求参数
+        CreateOutPaintingTaskRequest taskRequest = new CreateOutPaintingTaskRequest();
+        CreateOutPaintingTaskRequest.Input input = new CreateOutPaintingTaskRequest.Input();
+        input.setImageUrl(picture.getUrl());
+        taskRequest.setInput(input);
+        BeanUtil.copyProperties(createPictureOutPaintingTaskRequest, taskRequest);
+        // 创建任务
+        return aliYunAiApi.createOutPaintingTask(taskRequest);
     }
 
 
